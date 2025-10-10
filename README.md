@@ -1,6 +1,6 @@
 # RESIDÊNCIA EM TIC 55 - PROJETO NÚMERO 10: TP ACADEMIA 
 
-### Membros do grupo:
+### Alunos do projeto:
 - Alexandre Fraga
 - Daniel Santos
 - Jonas Lima Domingues
