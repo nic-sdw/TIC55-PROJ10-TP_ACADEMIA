@@ -1,2 +1,11 @@
-# TIC55-PROJ10-TP_ACADEMIA
-Projeto número 10, realizado pelos alunos da residência em TIC 55 em apoio a Eldorado do Sul
+# RESIDÊNCIA EM TIC 55 - PROJETO NÚMERO 10: TP ACADEMIA 
+
+### Membros do grupo:
+- Alexandre Fraga
+- Daniel Santos
+- Jonas Lima Domingues
+- Nicolas Sadowski Nunes
+- Regis Sobrosoa
+
+### Coordenador do grupo:
+- Jhonny Salazar Reidel
