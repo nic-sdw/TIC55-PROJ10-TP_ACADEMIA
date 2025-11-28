@@ -1,50 +1,94 @@
-# Imports do projeto
+# Imports principais do projeto
 import requests
 from dotenv import load_dotenv
 import os
 import json
-import datetime
 import pandas as pd
 
-# Carregando o .env
+# Carregando variáveis do .env (token, empresa_ID, etc)
 load_dotenv()
 
-# Token e ID da empreas que estão no .env
+# Pegando o token e o ID da empresa do arquivo .env
 token = os.getenv("TOKEN")
 empresa_id = os.getenv("EMPRESA_ID")
 
-# URL base que está no site da pacto
+# URL base usada em todos os endpoints da Pacto
 urlBase = "https://apigw.pactosolucoes.com.br"
 
+# Esses headers são obrigatórios em TODAS as requisições da API da Pacto
 headers = {
     "Authorization": f"Bearer {token}",
     "Content-Type": "application/json",
     "empresaId": empresa_id
-  }
+}
 
-# Função para buscar a empresa especifíca dentro do sistema da pacto
-# Dá para fazer uma que busca todas, mas para o propósito que queremos não faz sentido
 
+# Função para buscar os dados da empresa cadastrada no sistema
+# Não faz sentido criar uma função para listar todas as empresas,
+# porque só queremos consultar a empresa atual mesmo.
 def getEmpresa():
+    url_empresas = f"{urlBase}/v1/empresa/{empresa_id}"
 
-  # Endpoint da API
-  url_empresas = f"{urlBase}/v1/empresa/{empresa_id}"
-  # Aqui é realizada a requisição do tipo GET para a API
-  response = requests.get(url_empresas, headers=headers)
-  
-  # Se o status da requisição for 200(sucesso), ele retorna os dados em um json
-  if response.status_code == 200:
-    data = response.json()
-    print("Consulta funcionou!")
-    print(json.dumps(data, indent=2, ensure_ascii=False))
-    return data
-  
-  # Se não ela específica o erro...
-  else:
-    print(f"Erro {response.status_code}: {response.text}")
-    return None
-    
-getEmpresa()  
-  
+    response = requests.get(url_empresas, headers=headers)
 
-  
+    if response.status_code == 200:
+        data = response.json()
+        print("A consulta deu certo!")
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return data
+    else:
+        print(f"Erro {response.status_code}: {response.text}")
+        return None
+
+
+
+# Função genérica para consultar qualquer endpoint de agendamentos da Pacto.
+# Isso evita repetição de código, já que 'executados' e 'faltaram' seguem o mesmo padrão.
+def getAgendamentos(path, professor_id=1, page=1, size=10, sort="nome,asc"):
+
+    url = f"{urlBase}{path}"
+
+    # Parâmetros aceitos pelo endpoint (todos opcionais, exceto empresaId que vai no header)
+    params = {
+        "professorId": professor_id,
+        "page": page,
+        "size": size,
+        "sort": sort,
+        "filters": json.dumps({"professorId": professor_id})
+    }
+
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code == 200:
+        print("A requisição funcionou!")
+        dados = response.json()
+        print(json.dumps(dados, indent=2, ensure_ascii=False))
+        return dados
+    else:
+        print(f"Algo deu errado na consulta ({path})... {response.status_code}, {response.text}")
+        return None
+
+
+
+# Função que busca os agendamentos EXECUTADOS
+def getAgendamentosExecutados(professor_id=1, page=1, size=10, sort="nome,asc"):
+    return getAgendamentos(
+        path="/psec/treino-bi/agendamento-executaram",
+        professor_id=professor_id,
+        page=page,
+        size=size,
+        sort=sort
+    )
+
+
+# Função que busca os agendamentos que FALTARAM
+def getAgendamentosFaltaram(professor_id=1, page=1, size=10, sort="nome,asc"):
+    return getAgendamentos(
+        path="/psec/treino-bi/agendamento-faltaram",
+        professor_id=professor_id,
+        page=page,
+        size=size,
+        sort=sort
+    )
+
+getAgendamentosFaltaram()
