@@ -44,7 +44,7 @@ def getEmpresa():
 
 # Função genérica para consultar qualquer endpoint de agendamentos da Pacto.
 # Isso evita repetição de código, já que 'executados' e 'faltaram' seguem o mesmo padrão.
-def getAgendamentos(path, professor_id=1, page=1, size=10, sort="nome,asc"):
+def getAgendamentos(path, professor_id=1, page=0, size=100, sort="nome,asc"):
 
     url = f"{urlBase}{path}"
 
@@ -62,7 +62,7 @@ def getAgendamentos(path, professor_id=1, page=1, size=10, sort="nome,asc"):
     if response.status_code == 200:
         print("A requisição funcionou!")
         dados = response.json()
-        print(json.dumps(dados, indent=2, ensure_ascii=False))
+        # print(json.dumps(dados, indent=2, ensure_ascii=False))
         return dados
     else:
         print(f"Algo deu errado na consulta ({path})... {response.status_code}, {response.text}")
@@ -71,7 +71,7 @@ def getAgendamentos(path, professor_id=1, page=1, size=10, sort="nome,asc"):
 
 
 # Função que busca os agendamentos EXECUTADOS
-def getAgendamentosExecutados(professor_id=1, page=1, size=10, sort="nome,asc"):
+def getAgendamentosExecutados(professor_id=1, page=0, size=100, sort="nome,asc"):
     return getAgendamentos(
         path="/psec/treino-bi/agendamento-executaram",
         professor_id=professor_id,
@@ -82,7 +82,7 @@ def getAgendamentosExecutados(professor_id=1, page=1, size=10, sort="nome,asc"):
 
 
 # Função que busca os agendamentos que FALTARAM
-def getAgendamentosFaltaram(professor_id=1, page=1, size=10, sort="nome,asc"):
+def getAgendamentosFaltaram(professor_id=1, page=0, size=100, sort="nome,asc"):
     return getAgendamentos(
         path="/psec/treino-bi/agendamento-faltaram",
         professor_id=professor_id,
@@ -90,5 +90,39 @@ def getAgendamentosFaltaram(professor_id=1, page=1, size=10, sort="nome,asc"):
         size=size,
         sort=sort
     )
+    
+# Função geradora que busca dados de uma função de API paginada.
+# api_agendamentos: A função que busca os dados (ex: getAgendamentosExecutados).
+def buscarDadosPaginados(api_agendamentos, professor_id=1):
+    
+    pagina_atual = 0
+    
+    while True:
+        print(f"Buscando página {pagina_atual}...")
+        dados = api_agendamentos(professor_id=professor_id, page=pagina_atual)
 
-getAgendamentosFaltaram()
+        if dados is None:
+            print("Erro na conexão ou resposta inesperada da API PACTO")
+            break
+
+        content = dados.get('content', [])
+
+        for agendamento in content:
+            yield agendamento
+
+        # A coleta para quando a API não retorna mais conteúdo na lista 'content'.
+        if not content:
+            print("Fim da coleta de dados na API.")
+            break
+            
+        pagina_atual += 1
+
+eventos_filtros = ["Aula Experimental", "Primeiro Treino sem A.E", "Primeiro Treino com A.E"]
+
+agendamentos_filtrados = [ 
+                          agendamento for agendamento in buscarDadosPaginados(getAgendamentosExecutados)
+                          if agendamento.get('evento') in eventos_filtros
+                          ]
+print("-" * 50)
+print(f"Coleta finalizada! Total bruto coletado: {len(agendamentos_filtrados)}")
+print(agendamentos_filtrados)
