@@ -93,7 +93,7 @@ def getAgendamentosFaltaram(professor_id=1, page=0, size=100, sort="nome,asc"):
     
 # Função geradora que busca dados de uma função de API paginada.
 # api_agendamentos: A função que busca os dados (ex: getAgendamentosExecutados).
-def buscarDadosPaginados(api_agendamentos, professor_id=1):
+def getDadosPaginados(api_agendamentos, professor_id=1):
     
     pagina_atual = 0
     
@@ -116,13 +116,14 @@ def buscarDadosPaginados(api_agendamentos, professor_id=1):
             break
             
         pagina_atual += 1
+#Função pra pegar os agendamentos filtrados por eventos         
+def getAgendamentosFiltrados():
+    eventos_filtros = ["Aula Experimental", "Primeiro Treino sem A.E", "Primeiro Treino com A.E"]
 
-eventos_filtros = ["Aula Experimental", "Primeiro Treino sem A.E", "Primeiro Treino com A.E"]
-
-agendamentos_filtrados = [ 
-                          agendamento for agendamento in buscarDadosPaginados(getAgendamentosExecutados)
+    agendamentos_filtrados = [ 
+                          agendamento for agendamento in getDadosPaginados(getAgendamentosExecutados)
                           if agendamento.get('evento') in eventos_filtros
                           ]
-print("-" * 50)
-print(f"Coleta finalizada! Total bruto coletado: {len(agendamentos_filtrados)}")
-print(agendamentos_filtrados)
+    print(f"Coleta finalizada! Total bruto coletado: {len(agendamentos_filtrados)}")
+    return agendamentos_filtrados
+
