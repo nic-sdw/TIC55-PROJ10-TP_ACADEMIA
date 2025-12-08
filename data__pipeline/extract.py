@@ -90,7 +90,6 @@ def getAgendamentosFaltaram(professor_id=1, page=0, size=100, sort="nome,asc"):
         size=size,
         sort=sort
     )
-    
 # Função geradora que busca dados de uma função de API paginada.
 # api_agendamentos: A função que busca os dados (ex: getAgendamentosExecutados).
 def getDadosPaginados(api_agendamentos, professor_id=1):
@@ -126,4 +125,3 @@ def getAgendamentosFiltrados():
                           ]
     print(f"Coleta finalizada! Total bruto coletado: {len(agendamentos_filtrados)}")
     return agendamentos_filtrados
-

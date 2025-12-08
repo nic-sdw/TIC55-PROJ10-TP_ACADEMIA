@@ -12,15 +12,41 @@ def getAgendamentosLimpos() -> pd.DataFrame:
 
     colunas_planilha = ['matricula', 'nomeAluno', 'evento', 'Data', 'Hora']
 
-    agendamentos_df = agendamentos_df.sort_values(by='inicio', ascending=True).drop_duplicates(subset=['matricula', 'evento'], keep='last').assign(
-        Data = lambda df: df['inicio'].dt.strftime('%d/%m/%Y'),
-        Hora = lambda df: df['inicio'].dt.strftime('%H:%M')
+    agendamentos_df = (
+        agendamentos_df
+        .sort_values(by='inicio', ascending=True)
+        .drop_duplicates(subset=['matricula', 'evento'], keep='last')
+        .assign(
+            Data = lambda df: df['inicio'].dt.strftime('%d/%m/%Y'),
+            Hora = lambda df: df['inicio'].dt.strftime('%H:%M')
         )
-
+    )
+    
     colunas_finais = [col for col in colunas_planilha if col in agendamentos_df.columns]
+    
+    colunas_padrao = {
+        "matricula": "MATRICULA",
+        "nomeAluno": "ALUNO",
+        "evento": "TIPO DE TREINO",
+        "Data": "DATA",
+        "Hora": "HORA"
+    }
+    
+    agendamentos_df = agendamentos_df.rename(columns=colunas_padrao)
+    
+    agendamentos_df["ATENDENTE"] = agendamentos_df["HORA"].apply(
+        lambda h: "ATENDENTE 1" if int(h[:2]) < 12 else "ATENDENTE 2"
+    )
+    
+    colunas_ordenadas = [
+        "MATRICULA",
+        "ALUNO",
+        "TIPO DE TREINO",
+        "ATENDENTE",
+        "DATA",
+        "HORA"
+    ]
 
-    print(f"Processamento concluído. Total de agendamentos válidos: {len(agendamentos_df[colunas_finais])}")
-    print(agendamentos_df[colunas_finais])
-    return agendamentos_df[colunas_finais]
-
-getAgendamentosLimpos()
+    print(f"Processamento concluído. Total de agendamentos válidos: {len(agendamentos_df)}")
+    print(agendamentos_df[colunas_ordenadas])
+    return agendamentos_df[colunas_ordenadas]
