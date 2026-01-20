@@ -1,0 +1,26 @@
+from transform import getAgendamentosLimpos
+from load import salvar_no_google_sheets # Importa a função nova
+import pandas as pd
+
+def main():
+    print("--- INICIANDO AUTOMAÇÃO COMPLETA ---")
+    
+    # 1. Extração e Transformação
+    df_final = getAgendamentosLimpos()
+
+    # 2. Verificação
+    if df_final is not None and not df_final.empty:
+        print(f"\nDados processados: {len(df_final)} linhas.")
+        
+        # 3. Carregamento (Google Sheets)
+        # Substitua "NOME_DA_SUA_PLANILHA" pelo nome exato que está no Google
+        NOME_DA_PLANILHA = "Base Agendamentos Marketing" 
+        NOME_DA_ABA = "Dados_Brutos"
+        
+        salvar_no_google_sheets(df_final, NOME_DA_PLANILHA, NOME_DA_ABA)
+        
+    else:
+        print("\nSem dados novos para enviar.")
+
+if __name__ == "__main__":
+    main()
