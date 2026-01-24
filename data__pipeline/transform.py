@@ -1,11 +1,14 @@
 import pandas as pd
-from extract import getAgendamentosFiltrados
 
 # funçao para remover duplicatas e formata os dados.
 # Retorna um DataFrame do pandas com os dados limpos e formatados
-def getAgendamentosLimpos() -> pd.DataFrame:
+def getAgendamentosLimpos(data):
     
-    agendamentos_df = pd.DataFrame(getAgendamentosFiltrados())
+    if not data:
+        print("Zero dados retornados do extract.py")
+        return pd.DataFrame()
+    
+    agendamentos_df = pd.DataFrame(data)
 
     # Converter a coluna 'inicio' para o formato datetime
     agendamentos_df['inicio'] = pd.to_datetime(agendamentos_df['inicio'])

@@ -1,7 +1,0 @@
-from transform import getAgendamentosLimpos
-
-def main():
-  getAgendamentosLimpos()
-
-if __name__ == "__main__":
-  main()
