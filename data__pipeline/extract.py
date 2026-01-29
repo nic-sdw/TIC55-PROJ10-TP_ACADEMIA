@@ -1,6 +1,10 @@
 # Imports principais do projeto
 import requests
 import json
+import gspread
+import pandas as pd
+from pathlib import Path
+
 
 from . import config
 
@@ -104,3 +108,43 @@ def getAgendamentosFiltrados():
                           ]
     print(f"Coleta finalizada! Total bruto coletado: {len(agendamentos_filtrados)}")
     return agendamentos_filtrados
+
+#Função pra conectar com a planilha de mkt
+#Retorna um DF bruto, lógica de limpeza será feita no transform
+def get_leads():
+
+    print(" Conectando a planilha de mkt...")
+    
+    caminho_credenciais = Path(__file__).parent.parent / config.GOOGLE_JSON_FILE
+    
+    try:
+        gc = gspread.service_account(filename=str(caminho_credenciais))
+        sh = gc.open_by_key(config.GOOGLE_SHEETS_MKT)
+        worksheet = sh.worksheet("Diária")
+        
+        # Leitura bruta (Lista de Listas)
+        rows = worksheet.get_all_values()
+        
+        if not rows:
+            print(" Erro: Planilha vazia.")
+            return pd.DataFrame()
+
+        # Tratamento de Cabeçalhos Duplicados (ex: 'Origem' e 'Origem')
+        headers = rows[0]
+        new_headers = []
+        seen_headers = {}
+        
+        for h in headers:
+            if h in seen_headers:
+                seen_headers[h] += 1
+                new_headers.append(f"{h}_{seen_headers[h]}")
+            else:
+                seen_headers[h] = 1
+                new_headers.append(h)
+        
+        # Retorna o DataFrame Bruto
+        return pd.DataFrame(rows[1:], columns=new_headers)
+
+    except Exception as e:
+        print(f" Erro ao ler planilha: {e}")
+        return pd.DataFrame()

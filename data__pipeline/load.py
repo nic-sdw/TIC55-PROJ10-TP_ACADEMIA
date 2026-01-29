@@ -1,26 +1,13 @@
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 from . import config
 
 def connect_google_sheets():
-  scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-  ]
-  
-  try:
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(config.GOOGLE_JSON_FILE, scope)
-    client = gspread.authorize(credentials)
-    
-    return client
-  
-  except FileNotFoundError:
-    print(f"ERRO: O arquivo '{config.GOOGLE_JSON_FILE}', não foi encontrado." )
-    return None
-  except Exception as e:
-    print(f"ERRO: Falha na autenticação do Google: {e}")
-    return None  
+    try:
+        return gspread.service_account(filename=str(config.GOOGLE_CREDENTIALS_PATH))
+    except Exception as e:
+        print(f"ERRO: Falha na autenticação do Google: {e}")
+        return None
   
 def save_in_database(df, nome_da_aba="Historico"):
   if df is None or df.empty:
