@@ -1,9 +1,9 @@
-# transform.py
 import pandas as pd
 import re
 from datetime import datetime
 from unidecode import unidecode
-from thefuzz import process, fuzz
+# MUDANÇA: Importando RapidFuzz para alta performance
+from rapidfuzz import process, fuzz, utils
 
 # =============================================================================
 # 1. HELPERS (Normalização e Utilitários)
@@ -34,10 +34,12 @@ def getAgendamentosLimpos(data):
 
     # Converter a coluna 'inicio' para o formato datetime
     if 'inicio' in agendamentos_df.columns:
-        agendamentos_df['inicio'] = pd.to_datetime(agendamentos_df['inicio'])
+        # errors='coerce' transforma datas inválidas em NaT (Not a Time) para não quebrar o script
+        agendamentos_df['inicio'] = pd.to_datetime(agendamentos_df['inicio'], errors='coerce')
 
         agendamentos_df = (
             agendamentos_df
+            .dropna(subset=['inicio']) # Garante que não tem data inválida
             .sort_values(by='inicio', ascending=True)
             .drop_duplicates(subset=['matricula', 'evento'], keep='last')
             .assign(
@@ -99,12 +101,12 @@ def process_leads_marketing(df_bruto):
         print("Coluna de Mês não encontrada na planilha.")
         return pd.DataFrame()
 
-    # Filtro de Mês
-    filtro_mes = df_bruto[col_mes].astype(str).str.strip().str.upper()
+    # Filtro de Mês (Tratamento para garantir string e evitar erros)
+    df_bruto[col_mes] = df_bruto[col_mes].astype(str).str.strip().str.upper()
+    filtro_mes = df_bruto[col_mes]
     
-    # NOTA: Para testes com meses anteriores, você pode comentar a linha abaixo
+    # NOTA: Ajuste aqui se quiser testar outros meses
     df_filtrado = df_bruto[filtro_mes == nome_mes_atual.upper()].copy()
-    # df_filtrado = df_bruto.copy() # <--- Use essa se quiser ignorar o mês
     
     leads_limpos = []
 
@@ -113,7 +115,7 @@ def process_leads_marketing(df_bruto):
         origem_2 = row.get('Origem_2', 'Desconhecido')
         data_lead = str(row.get('Data', '')).strip()
         
-        # Mapeamento das colunas de vendedoras
+        # Mapeamento das colunas de vendedoras com tratamento de None
         mapa_vendedoras = [
             (str(row.get('Nomes agendados (Daniela Dalla)', '')), 'Daniela Dalla'),
             (str(row.get('Nomes agendados (Daniela Teixeira)', '')), 'Daniela Teixeira')
@@ -125,8 +127,8 @@ def process_leads_marketing(df_bruto):
                 # Regex para limpar datas e traços (Ex: "Joao - 10/10" -> "Joao")
                 nome_limpo = re.sub(r'\s*-\s*\d{2}/\d{2}.*', '', nome_sujo).strip()
                 
-                # Validação básica de nome (ignora vazios ou '-')
-                if nome_limpo and len(nome_limpo) > 2 and nome_limpo not in ['0', '-']:
+                # Validação básica de nome (ignora vazios, '0', '-' ou 'nan')
+                if nome_limpo and len(nome_limpo) > 2 and nome_limpo not in ['0', '-', 'nan', 'None']:
                     leads_limpos.append({
                         'ALUNO': nome_limpo.upper(), 
                         'ORIGEM': origem,
@@ -141,17 +143,16 @@ def process_leads_marketing(df_bruto):
     return df_leads
 
 # =============================================================================
-# 4. CRUZAMENTO INTELIGENTE (FUZZY MATCH)
+# 4. CRUZAMENTO INTELIGENTE (FUZZY MATCH COM RAPIDFUZZ)
 # =============================================================================
 
 def cruzar_vendas_fuzzy(df_leads, df_alunos, threshold=85):
     """
-    Cruza a planilha de Leads com a API de Alunos usando lógica Fuzzy.
+    Cruza a planilha de Leads com a API de Alunos usando RapidFuzz.
     """
     print(f" Iniciando Cruzamento Fuzzy (Corte: {threshold})...")
 
     # --- BLINDAGEM CONTRA ERROS ---
-    # Se não houver leads, retorna DF vazio MAS com as colunas certas para não quebrar o main.py
     if df_leads.empty:
         print("⚠️ Sem leads para cruzar. Retornando estrutura vazia.")
         return pd.DataFrame(columns=['ALUNO', 'match_score', 'match_nome_api', 'matriculaZW', 'SITUACAO_CONVERSAO'])
@@ -168,26 +169,47 @@ def cruzar_vendas_fuzzy(df_leads, df_alunos, threshold=85):
     col_nome_api = 'nome' if 'nome' in df_alunos.columns else 'Nome'
     df_alunos['nome_norm'] = df_alunos[col_nome_api].apply(normalizar_texto)
 
-    # 2. Lista de nomes únicos da API
+    # 2. Lista de nomes únicos da API (Garanta que são strings válidas)
     nomes_api = df_alunos['nome_norm'].dropna().unique().tolist()
-    
-    print(" Calculando similaridade entre nomes...")
+    nomes_api = [n for n in nomes_api if n and isinstance(n, str)] # Reforço de segurança
 
-    # 3. Busca Fuzzy
+    if not nomes_api:
+        print("⚠️ Lista de nomes da API vazia após normalização.")
+        return df_leads
+
+    print(" Calculando similaridade entre nomes (RapidFuzz)...")
+
+    # 3. Busca Fuzzy Otimizada
     def buscar_match(nome_lead):
-        if not nome_lead: return None, 0
-        # token_sort_ratio: Ignora ordem ("Silva Joao" == "Joao Silva")
-        match, score = process.extractOne(nome_lead, nomes_api, scorer=fuzz.token_sort_ratio)
-        if score >= threshold:
+        if not nome_lead: 
+            return None, 0
+        
+        # RapidFuzz: extractOne retorna (match, score, index)
+        # score_cutoff otimiza a busca parando assim que encontra algo inútil
+        resultado = process.extractOne(
+            nome_lead, 
+            nomes_api, 
+            scorer=fuzz.token_sort_ratio,
+            score_cutoff=threshold
+        )
+        
+        # Se resultado for None, não achou nada acima do threshold
+        if resultado:
+            match = resultado[0]
+            score = resultado[1]
             return match, score
+        
         return None, 0
 
+    # Aplica a busca
     matches = df_leads['nome_norm'].apply(buscar_match)
     
+    # Desempacota os resultados
     df_leads['match_nome_api'] = [m[0] for m in matches]
     df_leads['match_score'] = [m[1] for m in matches]
 
     # 4. Merge Final
+    # Remove duplicatas na base de alunos para evitar explosão de linhas no merge
     df_alunos_unique = df_alunos.drop_duplicates(subset=['nome_norm'])
     
     cols_possiveis = ['nome_norm', 'matriculaZW', 'contratoZW', 'dataMatriculaZW', 'situacaoAluno', 'planoZW']
@@ -203,8 +225,9 @@ def cruzar_vendas_fuzzy(df_leads, df_alunos, threshold=85):
     )
 
     # 5. Classificação
+    # Nota: Como usamos score_cutoff, quem não converteu já vem com score 0 ou None
     df_final['SITUACAO_CONVERSAO'] = df_final['match_score'].apply(
-        lambda x: 'CONVERTIDO' if x >= threshold else 'NÃO ENCONTRADO'
+        lambda x: 'CONVERTIDO' if x and x >= threshold else 'NÃO ENCONTRADO'
     )
 
     # 6. Limpeza
