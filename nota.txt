@@ -1,0 +1,12 @@
+pip install thefuzz python-Levenshtein unidecode
+
+A mais recomendada atualmente é a thefuzz (antiga fuzzywuzzy) ou a rapidfuzz (mais rápida).
+
+import pandas as pd
+from thefuzz import process, fuzz
+from unidecode import unidecode
+from . import config
+
+
+
+"Max 50 requisicoes por 1 minuto(s)."Isso significa que o seu script foi "rápido demais". O Python consegue fazer centenas de requisições em segundos, mas o servidor da Pacto bloqueia qualquer um que faça mais de 50 chamadas em 60 segundos.A Matemática da CorreçãoPara nunca ser bloqueado, precisamos impor um "limite de velocidade" no seu loop:$$60 \text{ segundos} / 50 \text{ requisições} = \mathbf{1.2 \text{ segundos de pausa}}$$Você precisa adicionar uma pausa de 1.2 segundos entre cada página.

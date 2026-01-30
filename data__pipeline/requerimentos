@@ -1,0 +1,5 @@
+pip install requests pandas python-dotenv gspread oauth2client matplotlib seaborn
+
+
+
+

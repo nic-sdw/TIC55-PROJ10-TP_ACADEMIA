@@ -1,0 +1,34 @@
+from transform import getAgendamentosLimpos
+import pandas as pd
+import os
+
+def main():
+    print("--- INICIANDO ETL (EXTRAÇÃO E TRANSFORMAÇÃO) ---")
+    
+    # 1. Chama a função que faz todo o trabalho pesado (Extract + Transform)
+    # O resultado fica guardado na variável 'df_final'
+    df_final = getAgendamentosLimpos()
+
+    # 2. Verificação de Segurança
+    # Só tentamos salvar se o dataframe existir e não estiver vazio
+    if df_final is not None and not df_final.empty:
+        print(f"\nSucesso! {len(df_final)} linhas processadas.")
+        
+        # 3. Definição do nome do arquivo
+        nome_arquivo = "agendamentos_tratados.csv"
+        
+        # 4. Salva em CSV (O formato universal para dados)
+        # index=False: Não salva a numeração das linhas (0, 1, 2...)
+        # encoding='utf-8-sig': Garante que acentos (ão, é, ç) funcionem no Excel
+        # sep=';': O Excel em português prefere ponto-e-vírgula como separador
+        df_final.to_csv(nome_arquivo, index=False, encoding='utf-8-sig', sep=';')
+        
+        # Mostra onde o arquivo foi salvo para você achar fácil
+        caminho_completo = os.path.abspath(nome_arquivo)
+        print(f"Arquivo gerado com sucesso em:\n{caminho_completo}")
+        
+    else:
+        print("\nO processo rodou, mas nenhum dado foi retornado (ou a lista estava vazia).")
+
+if __name__ == "__main__":
+    main()

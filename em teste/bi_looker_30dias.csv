@@ -1,0 +1,51 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def gerar_graficos_teste():
+    print("--- 📊 GERANDO GRÁFICOS DE TESTE ---")
+    
+    try:
+        # 1. Carregar os dados gerados no script anterior
+        df = pd.read_csv("bi_looker_30dias.csv", sep=';', encoding='utf-8-sig')
+        
+        # Configuração visual do Seaborn
+        sns.set_theme(style="whitegrid")
+        plt.rcParams['figure.figsize'] = [10, 6]
+
+        # --- GRÁFICO 1: Distribuição por Faixa Etária ---
+        plt.figure()
+        ordem_faixas = ['0-17', '18-25', '26-35', '36-45', '46-60', '60+']
+        sns.countplot(data=df, x='FAIXA_ETARIA', order=ordem_faixas, palette='viridis')
+        plt.title('Distribuição de Novos Alunos por Faixa Etária (30 dias)')
+        plt.xlabel('Faixa Etária')
+        plt.ylabel('Quantidade de Alunos')
+        plt.savefig('grafico_idade_teste.png')
+        print("   > [OK] Gráfico de Idade gerado: grafico_idade_teste.png")
+
+        # --- GRÁFICO 2: Perfil de Gênero (Sexo) ---
+        plt.figure()
+        df['SEXO'].value_counts().plot.pie(autopct='%1.1f%%', startangle=140, colors=['#ff9999','#66b3ff'])
+        plt.title('Proporção Masculino vs Feminino')
+        plt.ylabel('') # Remove o label do eixo Y
+        plt.savefig('grafico_sexo_teste.png')
+        print("   > [OK] Gráfico de Sexo gerado: grafico_sexo_teste.png")
+
+        # --- GRÁFICO 3: Status de Desistência (Churn) ---
+        plt.figure()
+        sns.countplot(data=df, x='DESISTENTE', palette='magma')
+        plt.title('Indicador de Desistência (Churn Preventivo)')
+        plt.xlabel('Desistente (Sim/Não)')
+        plt.ylabel('Quantidade')
+        plt.savefig('grafico_desistencia_teste.png')
+        print("   > [OK] Gráfico de Desistência gerado: grafico_desistencia_teste.png")
+
+        print("\n✅ Todos os gráficos foram salvos na sua pasta de teste!")
+
+    except FileNotFoundError:
+        print("❌ Erro: O arquivo 'bi_looker_30dias.csv' não foi encontrado.")
+    except Exception as e:
+        print(f"❌ Ocorreu um erro: {e}")
+
+if __name__ == "__main__":
+    gerar_graficos_teste()
