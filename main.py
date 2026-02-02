@@ -8,7 +8,6 @@ from data__pipeline import load
 def run():
   
   load_dotenv()
-  
   # Aqui eu crio uma variável que extrai e filtra os dados no extract.py
   dados = extract.getAgendamentosFiltrados() 
   # Passo os 'dados' por parâmetro e executo a função para tratar os dados e jogo para a variável 'df_filtrado'
@@ -18,11 +17,9 @@ def run():
   # Completo o ETL carregando os dados no banco de dados (planilha Google)
   load.save_in_database(df_filtrado, nome_da_aba="HISTORICO")
   
-  
-  # --- 2. MARKETING (Leads) ---
-  print("\n--- 2. MARKETING (Leads) ---")
+  print("\n--- MARKETING (Leads) ---")
     
-  # Extract: Lê bruto da planilha (Nome corrigido para bater com o extract.py)
+  # Extract: Lê bruto da planilha
   df_mkt_bruto = extract.get_leads()
     
   # Transform: Limpa regex, filtra mês e vendedora
@@ -35,9 +32,9 @@ def run():
       print("   Aviso: Nenhum lead encontrado na planilha para este mês.")
 
 
-  # --- 3. CRUZAMENTO (NOVO) ---
+  # CRUZAMENTO
   # Aqui usamos a função consolidar_dados que criamos no transform.py
-  print("\n--- 3. CONSOLIDAÇÃO ---")
+  print("\n--- CONSOLIDAÇÃO ---")
   
   if not df_filtrado.empty:
       # Cruza Pacto (df_filtrado) com Marketing (df_mkt)

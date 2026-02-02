@@ -1,7 +1,7 @@
 import pandas as pd
 import re
 from datetime import datetime
-
+from rapidfuzz import process, fuzz, utils 
 
 # funçao para remover duplicatas e formata os dados.
 # Retorna um DataFrame do pandas com os dados limpos e formatados
@@ -61,6 +61,28 @@ def _get_nome_mes(mes_numero):
              'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
     return meses[mes_numero] if 1 <= mes_numero <= 12 else None
 
+# função Auxiliar para Fuzzy Matching
+def obter_nomes_cruzados(nome_mkt, lista_alunos_pacto, corte=85):
+    if not nome_mkt or not lista_alunos_pacto:
+        return nome_mkt
+        
+    # token_set_ratio para lidar com nomes abreviados ou nomes do meio extras
+    resultado = process.extractOne(
+        nome_mkt, 
+        lista_alunos_pacto, 
+        scorer=fuzz.token_set_ratio, 
+        processor=utils.default_process,
+        score_cutoff=corte
+    )
+    
+    if resultado:
+        nome_encontrado, score, _ = resultado
+        if nome_encontrado.upper() != nome_mkt.upper():
+            print(f"   Fuzzy matching: '{nome_mkt}' -> '{nome_encontrado}' ({score:.1f}%)")
+        return nome_encontrado
+            
+    return nome_mkt
+
 #Regex, filtra mês atual e identifica vendedora.
 #Recebe o DF bruto do Extract
 def process_leads_marketing(df_bruto):
@@ -77,9 +99,10 @@ def process_leads_marketing(df_bruto):
         print("Mes nao encontrado na planilha, enviando df vazio")
         return pd.DataFrame()
 
-    # Filtro de Mês
-    filtro_mes = df_bruto['Mês'].astype(str).str.strip().str.upper()
-    df_filtrado = df_bruto[filtro_mes == nome_mes_atual.upper()].copy()
+    # sem  o filtro de mês para ler o histórico completo
+    # filtro_mes = df_bruto['Mês'].astype(str).str.strip().str.upper()
+    # df_filtrado = df_bruto[filtro_mes == nome_mes_atual.upper()].copy()
+    df_filtrado = df_bruto.copy()
     
     leads_limpos = []
 
@@ -89,6 +112,10 @@ def process_leads_marketing(df_bruto):
         
         data_lead = str(row.get('Data', '')).strip()
         
+        # Pega o mês da própria linha para referência 
+        col_mes = next((c for c in df_bruto.columns if 'Mês' in c or 'Mes' in c), None)
+        mes_ref = str(row.get(col_mes, '')).strip() if col_mes else nome_mes_atual
+
         mapa_vendedoras = [
             (str(row.get('Nomes agendados (Daniela Dalla)', '')), 'Daniela Dalla'),
             (str(row.get('Nomes agendados (Daniela Teixeira)', '')), 'Daniela Teixeira')
@@ -96,16 +123,18 @@ def process_leads_marketing(df_bruto):
         
         for nomes_sujos, nome_vendedora in mapa_vendedoras:
             for nome_sujo in nomes_sujos.split('\n'):
-                nome_limpo = re.sub(r'\s*-\s*\d{2}/\d{2}.*', '', nome_sujo).strip().upper()
+                # Regex para limpar datas junto com o nome
+                nome_limpo = re.sub(r'[0-9].*', '', nome_sujo) # Remove números/datas
+                nome_limpo = re.sub(r'[-/].*', '', nome_limpo).strip().upper() # Remove traços
                 
-                if nome_limpo and len(nome_limpo) > 2 and nome_limpo not in ['0', '-']:
+                if nome_limpo and len(nome_limpo) > 2 and nome_limpo not in ['0', '-', 'NAN', 'NONE']:
                     leads_limpos.append({
                         'ALUNO': nome_limpo,
                         'ORIGEM': origem,
                         'ORIGEM_2': origem_2,
                         'DATA': data_lead,
                         'VENDEDORA': nome_vendedora,
-                        'MES_REFERENCIA': nome_mes_atual
+                        'MES_REFERENCIA': mes_ref
                     })
     
     return pd.DataFrame(leads_limpos)
@@ -130,8 +159,19 @@ def consolidar_dados(df_pacto, df_mkt):
     df_pacto_copy = df_pacto.copy()
     df_mkt_copy = df_mkt.copy()
 
+    # Fuzzy Match antes de criar a chave
+    if 'ALUNO' in df_pacto_copy.columns:
+        lista_alunos = df_pacto_copy['ALUNO'].dropna().unique().tolist()
+        print(f"   Aplicando correção Fuzzy em {len(df_mkt_copy)} leads...")
+        df_mkt_copy['ALUNO'] = df_mkt_copy['ALUNO'].apply(
+            lambda x: obter_nomes_cruzados(x, lista_alunos, corte=85)
+        )
+
     df_pacto_copy['CHAVE_TEMP'] = df_pacto_copy['ALUNO'].astype(str).str.strip().str.upper()
     df_mkt_copy['CHAVE_TEMP'] = df_mkt_copy['ALUNO'].astype(str).str.strip().str.upper()
+
+    #  Deduplicação de segurança no Marketing (pega o último registro do lead)
+    df_mkt_copy = df_mkt_copy.drop_duplicates(subset=['CHAVE_TEMP'], keep='last')
 
     # MERGE (Left Join)
     # Mantemos a Pacto (Left) e trazemos as colunas do Mkt
