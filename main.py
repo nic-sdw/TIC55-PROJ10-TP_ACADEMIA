@@ -21,11 +21,14 @@ def run():
     
   # Extract: Lê bruto da planilha
   df_mkt_bruto = extract.get_leads()
+  contratos_brutos = extract.get_todos_contratos_ativos()
     
   # Transform: Limpa regex, filtra mês e vendedora
   df_mkt = transform.process_leads_marketing(df_mkt_bruto)
 
   if not df_mkt.empty:
+      df_mkt_com_vendas = transform.validar_vendas_com_lista(df_mkt, contratos_brutos)
+      load.save_in_database(df_mkt_com_vendas, nome_da_aba="VENDAS_MKT")
       print(f"   Sucesso! {len(df_mkt)} leads processados e limpos.")
       print(df_mkt)
   else:
@@ -38,7 +41,7 @@ def run():
   
   if not df_filtrado.empty:
       # Cruza Pacto (df_filtrado) com Marketing (df_mkt)
-      df_final = transform.consolidar_dados(df_filtrado, df_mkt)
+      df_final = transform.consolidar_dados(df_filtrado, df_mkt_com_vendas, contratos_brutos)
       print(df_final)
       # Salva o relatório final
       load.save_in_database(df_final, nome_da_aba="RELATORIO_FINAL")
