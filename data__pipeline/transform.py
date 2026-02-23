@@ -139,7 +139,7 @@ def process_leads_marketing(df_bruto):
     
     return pd.DataFrame(leads_limpos)
 #Funçaõ pra pegar os contratos e o nome das pessoas, pra nao repetir codigo
-def processar_contratos(lista_contratos_brutos)
+def processar_contratos(lista_contratos_brutos):
     if not lista_contratos_brutos:
         return pd.DataFrame(), []
 
