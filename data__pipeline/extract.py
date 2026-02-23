@@ -148,3 +148,32 @@ def get_leads():
     except Exception as e:
         print(f" Erro ao ler planilha: {e}")
         return pd.DataFrame()
+    
+#Busca todos os alunos ativos  
+def get_todos_contratos_ativos():
+    
+    url = f"{config.URL_BASE}/psec/alunos/v2"
+    headers = config.HEADERS.copy()
+    headers["empresaId"] = (config.EMPRESA_ID)
+    
+    filtro_json = json.dumps({"situacoesEnuns": ["AT"]})
+    params = {
+        "filters": filtro_json,
+        "page": 0,
+        "size": 1000, 
+        "sort": "id,DESC", 
+        "incluirAutorizado": "false"
+    }
+    
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=20)
+        if resp.status_code == 200:
+            dados = resp.json().get('content', [])
+            print(f" Sucesso! {len(dados)} contratos encontrados.")
+            return dados
+        else:
+            print(f" Erro na API: {resp.status_code}")
+            return []
+    except Exception as e:
+        print(f" Erro crítico na extração de contratos: {e}")
+        return []

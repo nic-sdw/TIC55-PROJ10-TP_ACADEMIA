@@ -39,7 +39,6 @@ def run():
   if not df_filtrado.empty:
       # Cruza Pacto (df_filtrado) com Marketing (df_mkt)
       df_final = transform.consolidar_dados(df_filtrado, df_mkt)
-      print("------------------------------------------------------------")
       print(df_final)
       # Salva o relatório final
       load.save_in_database(df_final, nome_da_aba="RELATORIO_FINAL")

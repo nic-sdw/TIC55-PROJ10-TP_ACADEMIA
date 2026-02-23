@@ -138,58 +138,157 @@ def process_leads_marketing(df_bruto):
                     })
     
     return pd.DataFrame(leads_limpos)
+#Funçaõ pra pegar os contratos e o nome das pessoas, pra nao repetir codigo
+def processar_contratos(lista_contratos_brutos)
+    if not lista_contratos_brutos:
+        return pd.DataFrame(), []
+
+    contratos = []
+    for c in lista_contratos_brutos:
+        timestamp = c.get('dataMatriculaZW')
+        contratos.append({
+            'NOME_SISTEMA': str(c.get('nome', '')).upper().strip(),
+            'PLANO_SISTEMA': c.get('planoZW', {}).get('nome', 'Sem Plano'),
+            'DATA_MATR_SISTEMA': datetime.fromtimestamp(timestamp).strftime('%d/%m/%Y') if timestamp else '-'
+        })
+    
+    df_contratos = pd.DataFrame(contratos)
+    
+    # Retornamos o DF e a lista de nomes separada para facilitar o Fuzzy Match
+    return df_contratos, df_contratos['NOME_SISTEMA'].tolist()
+
+def validar_vendas_com_lista(df_mkt, lista_contratos_brutos):
+    
+    if not lista_contratos_brutos or df_mkt.empty:
+        return df_mkt
+
+    print(f"Validando vendas localmente contra {len(lista_contratos_brutos)} contratos...")
+    
+    df_contratos, nomes_sistema = processar_contratos(lista_contratos_brutos)
+
+    resultados = []
+    for _, row in df_mkt.iterrows():
+        lead_dict = row.to_dict()
+        nome_lead = str(row['ALUNO']).upper().strip()
+        match = process.extractOne(nome_lead, nomes_sistema, scorer=fuzz.token_set_ratio, score_cutoff=85)
+
+        if match:
+            nome_encontrado, _, _ = match
+            dados_v = df_contratos[df_contratos['NOME_SISTEMA'] == nome_encontrado].iloc[0]
+            lead_dict.update({'COMPROU?': 'SIM', 'PLANO': dados_v['PLANO_SISTEMA'], 'DATA_MATRICULA': dados_v['DATA_MATR_SISTEMA']})
+        else:
+            lead_dict.update({'COMPROU?': 'NÃO', 'PLANO': 'Nenhum', 'DATA_MATRICULA': '-'})
+        resultados.append(lead_dict)
+
+    df_vendas = pd.DataFrame(resultados)
+
+    # Lógica Categórica para garantir a hierarquia na ordenação
+    df_vendas['COMPROU?'] = pd.Categorical(df_vendas['COMPROU?'], categories=['NÃO', 'SIM'], ordered=True)
+    df_vendas = df_vendas.sort_values(by=['ALUNO', 'COMPROU?'], ascending=[True, True])
+
+    # Converte de volta para string após garantir a ordem. 
+    # Isso evita o erro 'Cannot setitem on a Categorical' no salvamento.
+    df_vendas['COMPROU?'] = df_vendas['COMPROU?'].astype(str)
+
+    return df_vendas
 
 # Recebe os dados limpos da Pacto e do Marketing e realiza o cruzamento.
 # Retorna o DataFrame final pronto para salvar.
-def consolidar_dados(df_pacto, df_mkt):
+def consolidar_dados(df_pacto, df_mkt, lista_contratos_brutos=None):
 
-    print(" Cruzando dados (Pacto + Marketing)...")
-
-    if df_pacto.empty:
-        return pd.DataFrame()
-
-    # Se não tiver dados do Mkt, retorna a Pacto com colunas de origem vazias
-    if df_mkt.empty:
-        df_pacto['ORIGEM'] = 'Orgânico/Outros'
-        df_pacto['VENDEDORA'] = 'Recepção/Sistema'
-        return df_pacto
-
-    # Cria Chaves de Busca (Padronização)
-    # .copy() para não alterar o dataframe original fora da função
+    if df_pacto.empty: return pd.DataFrame()
     df_pacto_copy = df_pacto.copy()
-    df_mkt_copy = df_mkt.copy()
+    
+    if df_mkt.empty:
+        for col, val in [('ORIGEM', 'Orgânico/Outros'), ('VENDEDORA', 'Recepção/Sistema'), 
+                         ('COMPROU?', 'NÃO'), ('PLANO', 'Nenhum'), ('DATA_MATRICULA', '-')]:
+            df_pacto_copy[col] = val
+        return df_pacto_copy
 
-    # Fuzzy Match antes de criar a chave
+    df_mkt_copy = df_mkt.copy()
+    for col in ['COMPROU?', 'PLANO', 'DATA_MATRICULA']:
+        if col in df_mkt_copy.columns:
+            df_mkt_copy[col] = df_mkt_copy[col].astype(str)
+
     if 'ALUNO' in df_pacto_copy.columns:
-        lista_alunos = df_pacto_copy['ALUNO'].dropna().unique().tolist()
-        print(f"   Aplicando correção Fuzzy em {len(df_mkt_copy)} leads...")
+        lista_alunos_catraca = df_pacto_copy['ALUNO'].dropna().unique().tolist()
         df_mkt_copy['ALUNO'] = df_mkt_copy['ALUNO'].apply(
-            lambda x: obter_nomes_cruzados(x, lista_alunos, corte=85)
+            lambda x: obter_nomes_cruzados(x, lista_alunos_catraca, corte=85)
         )
 
     df_pacto_copy['CHAVE_TEMP'] = df_pacto_copy['ALUNO'].astype(str).str.strip().str.upper()
     df_mkt_copy['CHAVE_TEMP'] = df_mkt_copy['ALUNO'].astype(str).str.strip().str.upper()
 
-    #  Deduplicação de segurança no Marketing (pega o último registro do lead)
     df_mkt_copy = df_mkt_copy.drop_duplicates(subset=['CHAVE_TEMP'], keep='last')
 
-    # MERGE (Left Join)
-    # Mantemos a Pacto (Left) e trazemos as colunas do Mkt
-    df_final = pd.merge(
-        df_pacto_copy,
-        df_mkt_copy[['CHAVE_TEMP', 'ORIGEM', 'VENDEDORA']], 
-        on='CHAVE_TEMP',
-        how='left'
-    )
+    colunas_mkt = ['CHAVE_TEMP', 'ORIGEM', 'VENDEDORA', 'COMPROU?', 'PLANO', 'DATA_MATRICULA']
+    colunas_existentes = [c for c in colunas_mkt if c in df_mkt_copy.columns]
 
-    # Tratamento de quem não teve match 
-    df_final['ORIGEM'] = df_final['ORIGEM'].fillna('Orgânico/Outros')
-    df_final['VENDEDORA'] = df_final['VENDEDORA'].fillna('Recepção/Sistema')
+    df_final = pd.merge(df_pacto_copy, df_mkt_copy[colunas_existentes], on='CHAVE_TEMP', how='left')
 
-    # Limpeza da chave auxiliar
+    df_final['ORIGEM'] = df_final['ORIGEM'].fillna('Orgânico/Outros').astype(str)
+    df_final['VENDEDORA'] = df_final['VENDEDORA'].fillna('Recepção/Sistema').astype(str)
+    df_final['COMPROU?'] = df_final['COMPROU?'].fillna('NÃO').astype(str)
+    df_final['PLANO'] = df_final['PLANO'].fillna('Nenhum').astype(str)
+    df_final['DATA_MATRICULA'] = df_final['DATA_MATRICULA'].fillna('-').astype(str)
     df_final = df_final.drop(columns=['CHAVE_TEMP'])
+
+    
+    # repescagem para garantir que todas as não vendas estao corretas.
+    # acabou que botei dentro do if, mas da pra fazer uma funçao pra isso
+    if lista_contratos_brutos:
+        print("   Iniciando repescagem de Vendas Orgânicas e correção de colisões...")
+        
+        df_contratos, nomes_sistema = processar_contratos(lista_contratos_brutos)
+
+        # Varre todo o mundo que está como 'NÃO' no Relatório
+        repescados = 0
+        for idx, row in df_final.iterrows():
+            if row['COMPROU?'] == 'NÃO':
+                nome_catraca = str(row['ALUNO']).upper().strip()
+                
+                # Pega as 3 melhores opções de match para não errar
+                matches = process.extract(nome_catraca, nomes_sistema, scorer=fuzz.token_set_ratio, limit=3)
+                
+                for match_nome, score, _ in matches:
+                    if score >= 85:
+                        # Verifica as iniciais abreviadas
+                        # Ex: Se a catraca é "MARCIA S. MULLER", extrai o ['S']
+                        letras_abrev = re.findall(r'\b([A-Z])\.', nome_catraca)
+                        iniciais_completo = [p[0] for p in match_nome.split()] # Iniciais do contrato
+                        
+                        valido = True
+                        if letras_abrev:
+                            # Garante que todas as letras abreviadas existam no nome completo
+                            # A Marcia da (S)ilva passa. A Marcia (R)ejane reprova.
+                            valido = all(letra in iniciais_completo for letra in letras_abrev)
+                        
+                        if valido:
+                            dados_v = df_contratos[df_contratos['NOME_SISTEMA'] == match_nome].iloc[0]
+                            df_final.at[idx, 'COMPROU?'] = 'SIM'
+                            df_final.at[idx, 'PLANO'] = dados_v['PLANO_SISTEMA']
+                            df_final.at[idx, 'DATA_MATRICULA'] = dados_v['DATA_MATR_SISTEMA']
+                            repescados += 1
+                            break # Achou o aluno certo, ignora os outros matches
+        
+        print(f" Repescagem concluída: {repescados} vendas recuperadas com precisão.")
 
     matches = len(df_final[df_final['ORIGEM'] != 'Orgânico/Outros'])
     print(f"   [Transform] Cruzamento finalizado. {matches} atribuições encontradas.")
     
     return df_final
+
+#Função pra ordernar por data
+#Pode ser removida, usei na main
+def ordenar_por_data_recente(df, coluna_data='DATA'):
+   
+    if df.empty or coluna_data not in df.columns:
+        return df
+        
+    df_copy = df.copy()
+    # Cria a coluna temporal apenas para ordenação
+    df_copy['DATA_TEMP'] = pd.to_datetime(df_copy[coluna_data], format='%d/%m/%Y', errors='coerce')
+    
+    # Ordena decrescente e remove a coluna temporária
+    df_copy = df_copy.sort_values(by='DATA_TEMP', ascending=False)
+    return df_copy.drop(columns=['DATA_TEMP'])
