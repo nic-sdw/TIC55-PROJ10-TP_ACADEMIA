@@ -146,15 +146,26 @@ def processar_contratos(lista_contratos_brutos):
     contratos = []
     for c in lista_contratos_brutos:
         timestamp = c.get('dataMatriculaZW')
+        data_formatada = '-'
+        if timestamp:
+            # Se o valor for muito grande, assumimos que está em milissegundos
+            if timestamp > 1e10: 
+                timestamp = timestamp / 1000.0
+
+            try:
+                data_formatada = datetime.fromtimestamp(timestamp).strftime('%d/%m/%Y')
+            except (ValueError, OSError) as e:
+                print(f"Erro ao formatar data: {e}")
+                data_formatada = '-'
+
         contratos.append({
             'NOME_SISTEMA': str(c.get('nome', '')).upper().strip(),
             'PLANO_SISTEMA': c.get('planoZW', {}).get('nome', 'Sem Plano'),
-            'DATA_MATR_SISTEMA': datetime.fromtimestamp(timestamp).strftime('%d/%m/%Y') if timestamp else '-'
+            'DATA_MATR_SISTEMA': data_formatada
         })
-    
+
     df_contratos = pd.DataFrame(contratos)
-    
-    # Retornamos o DF e a lista de nomes separada para facilitar o Fuzzy Match
+
     return df_contratos, df_contratos['NOME_SISTEMA'].tolist()
 
 def validar_vendas_com_lista(df_mkt, lista_contratos_brutos):
