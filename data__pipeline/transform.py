@@ -83,7 +83,7 @@ def obter_nomes_cruzados(nome_mkt, lista_alunos_pacto, corte=85):
             
     return nome_mkt
 
-#Regex, filtra mês atual e identifica vendedora.
+#Regex, filtra mês atual e identifica VENDEDORA_AGENDAMENTO.
 #Recebe o DF bruto do Extract
 def process_leads_marketing(df_bruto):
 
@@ -133,7 +133,7 @@ def process_leads_marketing(df_bruto):
                         'ORIGEM': origem,
                         'ORIGEM_2': origem_2,
                         'DATA': data_lead,
-                        'VENDEDORA': nome_vendedora,
+                        'VENDEDORA_AGENDAMENTO': nome_vendedora,
                         'MES_REFERENCIA': mes_ref
                     })
     
@@ -161,14 +161,15 @@ def processar_contratos(lista_contratos_brutos):
         contratos.append({
             'NOME_SISTEMA': str(c.get('nome', '')).upper().strip(),
             'PLANO_SISTEMA': c.get('planoZW', {}).get('nome', 'Sem Plano'),
-            'DATA_MATR_SISTEMA': data_formatada
+            'DATA_MATR_SISTEMA': data_formatada,
+            'MATRICULA_ZW': c.get('matriculaZW') 
         })
 
     df_contratos = pd.DataFrame(contratos)
 
     return df_contratos, df_contratos['NOME_SISTEMA'].tolist()
 
-def validar_vendas_com_lista(df_mkt, lista_contratos_brutos):
+def validar_vendas_com_lista(df_mkt, lista_contratos_brutos, busca_hora=None):
     
     if not lista_contratos_brutos or df_mkt.empty:
         return df_mkt
@@ -186,9 +187,27 @@ def validar_vendas_com_lista(df_mkt, lista_contratos_brutos):
         if match:
             nome_encontrado, _, _ = match
             dados_v = df_contratos[df_contratos['NOME_SISTEMA'] == nome_encontrado].iloc[0]
-            lead_dict.update({'COMPROU?': 'SIM', 'PLANO': dados_v['PLANO_SISTEMA'], 'DATA_MATRICULA': dados_v['DATA_MATR_SISTEMA']})
+            
+            data_utc_str = busca_hora(dados_v.get('MATRICULA_ZW')) if busca_hora else None
+            hora_exata, vendedora_fechamento = '-', 'Sistema/Sem Hora'
+            
+            if data_utc_str:
+                dt_br = pd.to_datetime(data_utc_str) - pd.Timedelta(hours=3)
+                hora_exata = dt_br.strftime('%H:%M')
+                vendedora_fechamento = calcular_vendedora_por_escala(dt_br.strftime('%d/%m/%Y'), hora_exata)
+
+            lead_dict.update({
+                'COMPROU?': 'SIM', 
+                'PLANO': dados_v['PLANO_SISTEMA'], 
+                'DATA_MATRICULA': dados_v['DATA_MATR_SISTEMA'],
+                'HORA_MATRICULA': hora_exata,
+                'VENDEDORA_FECHAMENTO': vendedora_fechamento
+            })
         else:
-            lead_dict.update({'COMPROU?': 'NÃO', 'PLANO': 'Nenhum', 'DATA_MATRICULA': '-'})
+            lead_dict.update({
+                'COMPROU?': 'NÃO', 'PLANO': 'Nenhum', 'DATA_MATRICULA': '-',
+                'HORA_MATRICULA': '-', 'VENDEDORA_FECHAMENTO': '-'
+            })
         resultados.append(lead_dict)
 
     df_vendas = pd.DataFrame(resultados)
@@ -205,13 +224,13 @@ def validar_vendas_com_lista(df_mkt, lista_contratos_brutos):
 
 # Recebe os dados limpos da Pacto e do Marketing e realiza o cruzamento.
 # Retorna o DataFrame final pronto para salvar.
-def consolidar_dados(df_pacto, df_mkt, lista_contratos_brutos=None):
+def consolidar_dados(df_pacto, df_mkt, lista_contratos_brutos=None, busca_hora=None):
 
     if df_pacto.empty: return pd.DataFrame()
     df_pacto_copy = df_pacto.copy()
     
     if df_mkt.empty:
-        for col, val in [('ORIGEM', 'Orgânico/Outros'), ('VENDEDORA', 'Recepção/Sistema'), 
+        for col, val in [('ORIGEM', 'Orgânico/Outros'), ('VENDEDORA_AGENDAMENTO', 'Recepção/Sistema'), 
                          ('COMPROU?', 'NÃO'), ('PLANO', 'Nenhum'), ('DATA_MATRICULA', '-')]:
             df_pacto_copy[col] = val
         return df_pacto_copy
@@ -232,16 +251,18 @@ def consolidar_dados(df_pacto, df_mkt, lista_contratos_brutos=None):
 
     df_mkt_copy = df_mkt_copy.drop_duplicates(subset=['CHAVE_TEMP'], keep='last')
 
-    colunas_mkt = ['CHAVE_TEMP', 'ORIGEM', 'VENDEDORA', 'COMPROU?', 'PLANO', 'DATA_MATRICULA']
+    colunas_mkt = ['CHAVE_TEMP', 'ORIGEM', 'VENDEDORA_AGENDAMENTO', 'COMPROU?', 'PLANO', 'DATA_MATRICULA', 'HORA_MATRICULA', 'VENDEDORA_FECHAMENTO']
     colunas_existentes = [c for c in colunas_mkt if c in df_mkt_copy.columns]
 
     df_final = pd.merge(df_pacto_copy, df_mkt_copy[colunas_existentes], on='CHAVE_TEMP', how='left')
 
     df_final['ORIGEM'] = df_final['ORIGEM'].fillna('Orgânico/Outros').astype(str)
-    df_final['VENDEDORA'] = df_final['VENDEDORA'].fillna('Recepção/Sistema').astype(str)
+    df_final['VENDEDORA_AGENDAMENTO'] = df_final['VENDEDORA_AGENDAMENTO'].fillna('Recepção/Sistema').astype(str)
     df_final['COMPROU?'] = df_final['COMPROU?'].fillna('NÃO').astype(str)
     df_final['PLANO'] = df_final['PLANO'].fillna('Nenhum').astype(str)
     df_final['DATA_MATRICULA'] = df_final['DATA_MATRICULA'].fillna('-').astype(str)
+    df_final['HORA_MATRICULA'] = df_final.get('HORA_MATRICULA', pd.Series(['-']*len(df_final))).fillna('-').astype(str)
+    df_final['VENDEDORA_FECHAMENTO'] = df_final.get('VENDEDORA_FECHAMENTO', pd.Series(['-']*len(df_final))).fillna('-').astype(str)
     df_final = df_final.drop(columns=['CHAVE_TEMP'])
 
     
@@ -276,9 +297,20 @@ def consolidar_dados(df_pacto, df_mkt, lista_contratos_brutos=None):
                         
                         if valido:
                             dados_v = df_contratos[df_contratos['NOME_SISTEMA'] == match_nome].iloc[0]
+                            
+                            data_utc_str = busca_hora(dados_v.get('MATRICULA_ZW')) if busca_hora else None
+                            hora_exata, vendedora_fechamento = '-', 'Sistema/Sem Hora'
+                            
+                            if data_utc_str:
+                                dt_br = pd.to_datetime(data_utc_str) - pd.Timedelta(hours=3)
+                                hora_exata = dt_br.strftime('%H:%M')
+                                vendedora_fechamento = calcular_vendedora_por_escala(dt_br.strftime('%d/%m/%Y'), hora_exata)
+                                
                             df_final.at[idx, 'COMPROU?'] = 'SIM'
                             df_final.at[idx, 'PLANO'] = dados_v['PLANO_SISTEMA']
                             df_final.at[idx, 'DATA_MATRICULA'] = dados_v['DATA_MATR_SISTEMA']
+                            df_final.at[idx, 'HORA_MATRICULA'] = hora_exata
+                            df_final.at[idx, 'VENDEDORA_FECHAMENTO'] = vendedora_fechamento
                             repescados += 1
                             break # Achou o aluno certo, ignora os outros matches
         
@@ -303,3 +335,45 @@ def ordenar_por_data_recente(df, coluna_data='DATA'):
     # Ordena decrescente e remove a coluna temporária
     df_copy = df_copy.sort_values(by='DATA_TEMP', ascending=False)
     return df_copy.drop(columns=['DATA_TEMP'])
+
+def calcular_vendedora_por_escala(data_str, hora_str):
+    try:
+        if pd.isna(hora_str) or str(hora_str).strip() in ['-', '']: 
+            return "Sem Horário"
+        
+        # Garante a leitura correta da data no padrão BR
+        data_obj = pd.to_datetime(data_str, dayfirst=True, errors='coerce')
+        
+        if pd.isna(data_obj): 
+            return "Data Inválida"
+            
+        dia_semana = data_obj.weekday() # 0=Seg ... 5=Sáb
+
+        if dia_semana <= 4: # Segunda a Sexta
+            hora, minuto = map(int, str(hora_str).split(':'))
+            # Regra dos turnos durante a semana
+            if (hora > 6 or (hora == 6 and minuto >= 0)) and (hora < 14 or (hora == 14 and minuto < 30)):
+                return "Daniela Teixeira"
+            elif (hora > 14 or (hora == 14 and minuto >= 30)) and (hora <= 22):
+                return "Daniela Dala"
+            else:
+                return "Fora do Turno"
+        
+        elif dia_semana == 5: # Sábado (Lógica de Alternância)
+            # Data de referência: Sábado, 14/03/2026 - Daniela Dalla
+            data_ref = pd.to_datetime('14/03/2026', dayfirst=True)
+            
+            # Calcula a diferença de semanas
+            semanas_dif = (data_obj - data_ref).days // 7
+            
+            # Se a diferença for par (0, 2, 4...), é a Dalla. Se for ímpar, é a Teixeira.
+            if semanas_dif % 2 == 0:
+                return "Daniela Dalla"
+            else:
+                return "Daniela Teixeira"
+            
+        else: # Domingo
+            return "Domingo"
+            
+    except Exception as e:
+        return f"Erro: {str(e)}"

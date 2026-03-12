@@ -177,3 +177,24 @@ def get_todos_contratos_ativos():
     except Exception as e:
         print(f" Erro crítico na extração de contratos: {e}")
         return []
+    
+def get_horario_matricula(matricula):
+    url = f"{config.URL_BASE}/v1/cliente"
+    headers = config.HEADERS.copy()
+    headers["empresaId"] = (config.EMPRESA_ID) 
+
+    params = {
+        "matricula": matricula,
+        "page": 0,
+        "size": 10
+    }
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        if response.status_code == 200:
+            conteudo = response.json().get('content', [])
+            if conteudo:
+                # Retorna a string pura do dia (ex: 2026-02-27T13:44:19.982+00:00)
+                return conteudo[0].get('clienteSintetico', {}).get('dia')
+    except Exception as e:
+        print(f"   [Aviso] Falha ao buscar hora para matrícula {matricula}: {e}")
+    return None
