@@ -330,7 +330,7 @@ def ordenar_por_data_recente(df, coluna_data='DATA'):
         
     df_copy = df.copy()
     # Cria a coluna temporal apenas para ordenação
-    df_copy['DATA_TEMP'] = pd.to_datetime(df_copy[coluna_data], format='%d/%m/%Y', errors='coerce')
+    df_copy['DATA_TEMP'] = pd.to_datetime(df_copy[coluna_data], dayfirst=True, format='%d/%m/%Y', errors='coerce')
     
     # Ordena decrescente e remove a coluna temporária
     df_copy = df_copy.sort_values(by='DATA_TEMP', ascending=False)
@@ -355,7 +355,7 @@ def calcular_vendedora_por_escala(data_str, hora_str):
             if (hora > 6 or (hora == 6 and minuto >= 0)) and (hora < 14 or (hora == 14 and minuto < 30)):
                 return "Daniela Teixeira"
             elif (hora > 14 or (hora == 14 and minuto >= 30)) and (hora <= 22):
-                return "Daniela Dala"
+                return "Daniela Dalla"
             else:
                 return "Fora do Turno"
         

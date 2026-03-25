@@ -28,6 +28,7 @@ def run():
 
   if not df_mkt.empty:
       df_mkt_com_vendas = transform.validar_vendas_com_lista(df_mkt, contratos_brutos, busca_hora=extract.get_horario_matricula)
+      load.save_in_database(df_mkt_bruto, nome_da_aba="MKT_CLONE")
       load.save_in_database(df_mkt_com_vendas, nome_da_aba="VENDAS_MKT")
       print(f"   Sucesso! {len(df_mkt)} leads processados e limpos.")
       print(df_mkt)
