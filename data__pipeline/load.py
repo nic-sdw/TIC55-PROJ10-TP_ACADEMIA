@@ -39,15 +39,25 @@ def save_in_database(df, nome_da_aba="Historico"):
     df_limpo = df.fillna('')
     df_limpo = df_limpo.astype(str)
     
-    if not df_existente.empty:
+    df_limpo = df.fillna('')
+    df_limpo = df_limpo.astype(str)
+    
+    # Só concatena se a aba NÃO for o MKT_CLONE
+    if not df_existente.empty and nome_da_aba != 'MKT_CLONE':
         df_existente = df_existente.reindex(columns=df_limpo.columns).fillna('').astype(str)
         df_combinado = pd.concat([df_existente, df_limpo], ignore_index=True)
         
+        # Aproveitei e criei subsets seguros para as outras abas não incharem também!
         if nome_da_aba == 'VENDAS_MKT':
-          df_combinado = df_combinado.drop_duplicates(subset=['ALUNO'], keep='last')
+            df_combinado = df_combinado.drop_duplicates(subset=['ALUNO'], keep='last')
+        elif nome_da_aba == 'RELATORIO_FINAL':
+            df_combinado = df_combinado.drop_duplicates(subset=['ALUNO'], keep='last')
+        elif nome_da_aba == 'HISTORICO':
+            df_combinado = df_combinado.drop_duplicates(subset=['MATRICULA', 'TIPO DE TREINO'], keep='last')
         else:
-          df_combinado = df_combinado.drop_duplicates(keep='last')
+            df_combinado = df_combinado.drop_duplicates(keep='last')
     else:
+        # Se for MKT_CLONE, ignora o histórico e apenas clona a versão mais recente!
         df_combinado = df_limpo
         
     dados_para_enviar = [df_combinado.columns.values.tolist()] + df_combinado.values.tolist()
